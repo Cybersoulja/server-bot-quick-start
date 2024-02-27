@@ -10,21 +10,13 @@ import re
 from collections import defaultdict
 from typing import AsyncIterable, AsyncIterator
 
-from fastapi_poe import PoeBot
-from fastapi_poe.client import stream_request
-from fastapi_poe.types import (
-    MetaResponse,
-    PartialResponse,
-    ProtocolMessage,
-    QueryRequest,
-    SettingsRequest,
-    SettingsResponse,
-)
+import fastapi_poe as fp
+from modal import Image, Stub, asgi_app
 
 
 async def combine_streams(
-    *streams: AsyncIterator[PartialResponse],
-) -> AsyncIterator[PartialResponse]:
+    *streams: AsyncIterator[fp.PartialResponse],
+) -> AsyncIterator[fp.PartialResponse]:
     """Combines a list of streams into one single response stream.
 
     Allows you to render multiple responses in parallel.
@@ -34,8 +26,8 @@ async def combine_streams(
     responses: dict[int, list[str]] = defaultdict(list)
 
     async def _advance_stream(
-        stream_id: int, gen: AsyncIterator[PartialResponse]
-    ) -> tuple[int, PartialResponse | None]:
+        stream_id: int, gen: AsyncIterator[fp.PartialResponse]
+    ) -> tuple[int, fp.PartialResponse | None]:
         try:
             return stream_id, await gen.__anext__()
         except StopAsyncIteration:
@@ -53,7 +45,7 @@ async def combine_streams(
                 del active_streams[stream_id]
                 continue
 
-            if isinstance(msg, MetaResponse):
+            if isinstance(msg, fp.MetaResponse):
                 continue
             elif msg.is_suggested_reply:
                 yield msg
@@ -66,10 +58,10 @@ async def combine_streams(
             text = "\n\n".join(
                 "".join(chunks) for stream_id, chunks in responses.items()
             )
-            yield PartialResponse(text=text, is_replace_response=True)
+            yield fp.PartialResponse(text=text, is_replace_response=True)
 
 
-def preprocess_message(message: ProtocolMessage, bot: str) -> ProtocolMessage:
+def preprocess_message(message: fp.ProtocolMessage, bot: str) -> fp.ProtocolMessage:
     """Process bot responses to keep only the parts that come from the given bot."""
     if message.role == "bot":
         parts = re.split(r"\*\*([A-Za-z_\-\d]+)\*\* says:\n", message.content)
@@ -82,7 +74,7 @@ def preprocess_message(message: ProtocolMessage, bot: str) -> ProtocolMessage:
         return message
 
 
-def preprocess_query(request: QueryRequest, bot: str) -> QueryRequest:
+def preprocess_query(request: fp.QueryRequest, bot: str) -> fp.QueryRequest:
     """Parses the two bot responses and keeps the one for the current bot."""
     new_query = request.model_copy(
         update={
@@ -93,16 +85,18 @@ def preprocess_query(request: QueryRequest, bot: str) -> QueryRequest:
 
 
 async def stream_request_wrapper(
-    request: QueryRequest, bot: str
-) -> AsyncIterator[PartialResponse]:
+    request: fp.QueryRequest, bot: str
+) -> AsyncIterator[fp.PartialResponse]:
     """Wraps stream_request and labels the bot response with the bot name."""
-    label = PartialResponse(text=f"**{bot.title()}** says:\n", is_replace_response=True)
+    label = fp.PartialResponse(
+        text=f"**{bot.title()}** says:\n", is_replace_response=True
+    )
     yield label
-    async for msg in stream_request(
+    async for msg in fp.stream_request(
         preprocess_query(request, bot), bot, request.access_key
     ):
         if isinstance(msg, Exception):
-            yield PartialResponse(
+            yield fp.PartialResponse(
                 text=f"**{bot.title()}** ran into an error", is_replace_response=True
             )
             return
@@ -112,10 +106,10 @@ async def stream_request_wrapper(
         yield msg.model_copy(update={"is_replace_response": False})
 
 
-class GPT35TurbovsClaudeBot(PoeBot):
+class GPT35TurbovsClaudeBot(fp.PoeBot):
     async def get_response(
-        self, request: QueryRequest
-    ) -> AsyncIterable[PartialResponse]:
+        self, request: fp.QueryRequest
+    ) -> AsyncIterable[fp.PartialResponse]:
         streams = [
             stream_request_wrapper(request, bot)
             for bot in ("GPT-3.5-Turbo", "Claude-instant")
@@ -123,7 +117,28 @@ class GPT35TurbovsClaudeBot(PoeBot):
         async for msg in combine_streams(*streams):
             yield msg
 
-    async def get_settings(self, setting: SettingsRequest) -> SettingsResponse:
-        return SettingsResponse(
+    async def get_settings(self, setting: fp.SettingsRequest) -> fp.SettingsResponse:
+        return fp.SettingsResponse(
             server_bot_dependencies={"GPT-3.5-Turbo": 1, "Claude-instant": 1}
         )
+
+
+REQUIREMENTS = ["fastapi-poe==0.0.25"]
+image = Image.debian_slim().pip_install(*REQUIREMENTS)
+stub = Stub("turbo-vs-claude-poe")
+
+
+@stub.function(image=image)
+@asgi_app()
+def fastapi_app():
+    bot = GPT35TurbovsClaudeBot()
+    # Optionally, provide your Poe access key here:
+    # 1. You can go to https://poe.com/create_bot?server=1 to generate an access key.
+    # 2. We strongly recommend using a key for a production bot to prevent abuse,
+    # but the starter examples disable the key check for convenience.
+    # 3. You can also store your access key on modal.com and retrieve it in this function
+    # by following the instructions at: https://modal.com/docs/guide/secrets
+    # POE_ACCESS_KEY = ""
+    # app = make_app(bot, access_key=POE_ACCESS_KEY)
+    app = fp.make_app(bot, allow_without_key=True)
+    return app
