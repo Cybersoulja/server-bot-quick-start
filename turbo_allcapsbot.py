@@ -3,6 +3,7 @@
 Sample bot that wraps GPT-3.5-Turbo but makes responses use all-caps.
 
 """
+
 from __future__ import annotations
 
 from typing import AsyncIterable
@@ -24,7 +25,7 @@ class GPT35TurboAllCapsBot(fp.PoeBot):
         return fp.SettingsResponse(server_bot_dependencies={"GPT-3.5-Turbo": 1})
 
 
-REQUIREMENTS = ["fastapi-poe==0.0.24"]
+REQUIREMENTS = ["fastapi-poe==0.0.36"]
 image = Image.debian_slim().pip_install(*REQUIREMENTS)
 stub = Stub("turbo-allcaps-poe")
 

@@ -3,6 +3,7 @@
 Sample bot that demonstrates how to use OpenAI function calling with the Poe API.
 
 """
+
 from __future__ import annotations
 
 import json
@@ -68,7 +69,7 @@ class GPT35FunctionCallingBot(fp.PoeBot):
         return fp.SettingsResponse(server_bot_dependencies={"GPT-3.5-Turbo": 2})
 
 
-REQUIREMENTS = ["fastapi-poe==0.0.25"]
+REQUIREMENTS = ["fastapi-poe==0.0.36"]
 image = Image.debian_slim().pip_install(*REQUIREMENTS)
 stub = Stub("function-calling-poe")
 

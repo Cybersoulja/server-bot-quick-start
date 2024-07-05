@@ -3,6 +3,7 @@
 Sample bot that returns interleaved results from GPT-3.5-Turbo and Claude-instant.
 
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -123,7 +124,7 @@ class GPT35TurbovsClaudeBot(fp.PoeBot):
         )
 
 
-REQUIREMENTS = ["fastapi-poe==0.0.25"]
+REQUIREMENTS = ["fastapi-poe==0.0.36"]
 image = Image.debian_slim().pip_install(*REQUIREMENTS)
 stub = Stub("turbo-vs-claude-poe")
 

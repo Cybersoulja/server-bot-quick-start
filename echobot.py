@@ -5,6 +5,7 @@ Sample bot that echoes back messages.
 This is the simplest possible bot and a great place to start if you want to build your own bot.
 
 """
+
 from __future__ import annotations
 
 from typing import AsyncIterable
@@ -21,7 +22,7 @@ class EchoBot(fp.PoeBot):
         yield fp.PartialResponse(text=last_message)
 
 
-REQUIREMENTS = ["fastapi-poe==0.0.25"]
+REQUIREMENTS = ["fastapi-poe==0.0.36"]
 image = Image.debian_slim().pip_install(*REQUIREMENTS)
 stub = Stub("echobot-poe")
 
